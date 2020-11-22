@@ -145,7 +145,108 @@ def train(train_loader, net, criterion, optimizer, device, train_args):
     ############################################
     writer.close()
 
-def main(args,cfgs):
+def main(args, cfgs):
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    logging.info(f'Using device {device}')
+    ############################################
+    class_names = cfgs["class_names"]
+    n_classes = cfgs["n_classes"]
+    multi_gpu = cfgs["gpus"]
+    Net = cfgs["net_name"]
+    image_root = cfgs["image_root"]
+    epochs = cfgs["epochs"]
+    batch_size_train = cfgs["batch_size_train"]
+    checkpoint_dir = cfgs["checkpoint_dir"]
+    checkpoint_space = cfgs["checkpoint_space"]
+    ############################################
+    validate_flag = args.validate
+    model_load_path = args.checkpoint_path
+    ############################################
+    try:
+        if Net == "deeplab":
+            net = DeepLab(num_classes = n_classes)
+        elif Net == "unet":
+            net = UNet(n_channels = 3, n_classes = n_classes)
+        elif Net == "R2U_Net":
+            net = R2U_Net(img_ch=3,output_ch=n_classes,t=3)
+        elif Net == "AttU_Net":
+            net = AttU_Net(img_ch=3,output_ch=n_classes)
+        elif Net == "R2AttU_Net":
+            net = R2AttU_Net(img_ch=3,output_ch=n_classes,t=3)
+        elif Net == "U_Net":
+            net = U_Net(img_ch=3,output_ch=n_classes)
+        net.to(device = device)
+        if multi_gpu > 1:
+            net = nn.parallel.DataParallel(net)
+        ############################################
+        optimizer = optim.Adam(net.parameters())
+        if n_classes > 1:
+            criterion = nn.CrossEntropyLoss()
+            # criterion = MultiClassDiceLoss()
+        else:
+            criterion = nn.BCEWithLogitsLoss()
+        ############################################
+        # todo transformer
+        transform_train = transforms.Compose([
+            #transforms.Resize((307, 409)),
+            transforms.ToTensor(),
+        ])
+        transform_val = transforms.Compose([
+            #transforms.Resize((307, 409)),
+            transforms.ToTensor(),
+        ])
+        ############################################
+        spliteRate = 0.8
+        imageDir = os.path.join(image_root, "digestpath_img_patch")
+        #maskDir = os.path.join(image_root, "digestpath_mask_patch")
+        typeNames = ["normal", "low level", "high level"]
+        trainImagePaths = []
+        testImagePaths = []
+        for i in range(len(typeNames)):
+            subDir = os.path.join(imageDir, typeNames[i])
+            subjectIds = os.listdir(subDir)
+            tmpIndex = int( len(subjectIds) * spliteRate)
+            for subjectId in subjectIds[:tmpIndex]:
+                subjectDir = os.path.join(subDir, subjectId)
+                for fileNames in os.listdir(subjectDir):
+                    filePath = os.path.join(subjectDir, fileName)
+                    trainImagePaths.append(filePath)
+            for subjectId in subjectIds[tmpIndex:]:
+                subjectDir = os.path.join(subDir, subjectId)
+                for fileNames in os.listdir(subjectDir):
+                    filePath = os.path.join(subjectDir, fileName)
+                    testImagePaths.append(filePath)
+        trainMaskPaths = [p.replace("/digestpath_img_patch/", "/digestpath_mask_patch/") for p in trainImagePaths]
+        testMaskPaths = [p.replace("/digestpath_img_patch/", "/digestpath_mask_patch/") for p in testImagePaths]
+        ############################################
+        train_set = wsiDataset(trainImagePaths, trainMaskPaths, transform_train)
+        train_loader = DataLoader(train_set, batch_size=batch_size_train, num_workers=4, shuffle=True)
+        val_set = wsiDataset(testImagePaths, testMaskPaths, transform_val)
+        val_loader = DataLoader(val_set, batch_size=1, num_workers=4, shuffle=False)
+        ############################################
+        if validate_flag:
+            if os.path.exists(model_load_path):
+                net.load_state_dict(torch.load(model_load_path, map_location = device))
+                logging.info(f'Checkpoint loaded from {model_load_path}')
+                validate_args = {"n_classes":n_classes, "checkpoint_dir":checkpoint_dir, "checkpoint_space":checkpoint_space,}
+                validate(val_loader, net, criterion, device, validate_args)
+            else:
+                logging.info(f'No such checkpoint !')
+        else:
+            # todo lr_scheduler
+            train_args = {"epochs":epochs, "checkpoint_dir":checkpoint_dir, "checkpoint_space":checkpoint_space,}
+            train(train_loader, net, criterion, optimizer, device, train_args)
+    except KeyboardInterrupt:
+        torch.save(net.state_dict(), os.path.join(checkpoint_dir,'INTERRUPTED.pth'))
+        logging.info('Saved interrupt')
+        try:
+            sys.exit(0)
+        except SystemExit:
+            os._exit(0)
+
+
+
+def main_coco(args, cfgs):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     logging.info(f'Using device {device}')
     ############################################
@@ -226,5 +327,5 @@ def main(args,cfgs):
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
     args = get_args()
-    main(args,cfgs)
+    main(args, cfgs)
 

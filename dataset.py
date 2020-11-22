@@ -89,3 +89,26 @@ class DatasetMR(Dataset):
         # (out_data.shape) (1,H,W)
         # (mask.shape) (H,W)
         return {'image': in_data, 'mask': mask }
+
+
+
+class wsiDataset(Dataset):
+    def __init__(self, images, masks, transform = None):
+        self.images = images
+        self.masks = masks
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.images)
+
+    def __getitem__(self, index):
+        image, mask= self.images[index],self.masks[index]
+        image = Image.open(image).convert('RGB')
+        #mask = Image.open(mask).convert('RGB')
+        mask = Image.fromarray(np.load(mask))
+        if self.transform:
+            image = self.transform(image)
+            mask = self.transform(mask)
+        # (image.shape) (3,H,W)
+        # (mask.shape) (H,W)
+        return {'image': image, 'mask': mask }
