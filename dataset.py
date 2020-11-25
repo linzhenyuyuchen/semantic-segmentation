@@ -105,10 +105,33 @@ class wsiDataset(Dataset):
         image, mask= self.images[index],self.masks[index]
         image = Image.open(image).convert('RGB')
         #mask = Image.open(mask).convert('RGB')
-        mask = Image.fromarray(np.load(mask))
+        mask = torch.LongTensor(np.load(mask, allow_pickle=True).astype("uint8"))
         if self.transform:
             image = self.transform(image)
-            mask = self.transform(mask)
+            #mask = self.transform(mask)
         # (image.shape) (3,H,W)
         # (mask.shape) (H,W)
         return {'image': image, 'mask': mask }
+
+class wsiDataset2(Dataset):
+    def __init__(self, images, masks, transform = None):
+        self.images = images
+        self.masks = masks
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.images)
+
+    def __getitem__(self, index):
+        image, mask= self.images[index],self.masks[index]
+        image = Image.open(image).convert('RGB')
+        #mask = Image.open(mask).convert('RGB')
+        mask = np.load(mask, allow_pickle=True).astype("uint8")
+        label = torch.LongTensor([np.max(mask)])
+        mask = torch.LongTensor(mask)
+        if self.transform:
+            image = self.transform(image)
+            #mask = self.transform(mask)
+        # (image.shape) (3,H,W)
+        # (mask.shape) (H,W)
+        return {'image': image, 'mask': mask, "label": label }

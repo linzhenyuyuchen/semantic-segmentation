@@ -6,7 +6,7 @@ from cfg import *
 def dice_score(input,target): # validation
     eps = 0.0001
     input = input.contiguous()
-    target = target.contiguous()
+    target = target.contiguous().float()
     input = torch.sigmoid(input)
     input[input >= 0.5] = 1
     input[input < 0.5] = 0
